@@ -1,5 +1,5 @@
 /*
- * HDR toggle attempt via macOS private API with "safe" fallback.
+ * Experimental HDR toggle attempt via private symbols, with safe fallback.
  *
  * Build:
  *
@@ -12,12 +12,10 @@
  *      ./hdrctl-private toggle --display "LG TV SSCR2"
  *
  * Notes:
- *
  *  - This binary logs private symbol/service availability.
  *  - It *attempts* a private HDR toggle in a subprocess to avoid crashing the parent.
  *  - If the private attempt fails (missing symbol, non-zero return, or child crash),
  *    it falls back to the public CoreGraphics mode switch (10-bit vs 8-bit) used by hdrctl.swift.
- *
  */
 import Foundation
 import CoreGraphics
@@ -357,20 +355,6 @@ private let _cgDisplayModeCopyPixelEncoding: CGDisplayModeCopyPixelEncodingFn? =
     return unsafeBitCast(p, to: CGDisplayModeCopyPixelEncodingFn.self)
 }()
 
-// Protocol workaround to silence deprecation warning for mode.pixelEncoding (deprecated in 10.11).
-// Call through protocol witness so compiler does not warn at call site.
-private protocol _DeprecatedPixelEncoding {
-    func _fallbackPixelEncoding() -> String?
-}
-
-extension CGDisplayMode: _DeprecatedPixelEncoding {
-    // override "warning: 'pixelEncoding' was deprecated in macOS 10.11: No longer supported"
-    @available(*, deprecated, message: "fallback when CGDisplayModeCopyPixelEncoding unavailable")
-    func _fallbackPixelEncoding() -> String? {
-        return pixelEncoding as String?
-    }
-}
-
 func pixelEncoding(of mode: CGDisplayMode) -> String
 {
     // On newer macOS versions, `mode.pixelEncoding` may return a "layout string"
@@ -380,7 +364,7 @@ func pixelEncoding(of mode: CGDisplayMode) -> String
     {
         return u.takeRetainedValue() as String
     }
-    return (mode as _DeprecatedPixelEncoding)._fallbackPixelEncoding() ?? ""
+    return (mode.pixelEncoding as String?) ?? ""
 }
 
 func pixelComponentBits(from encoding: String) -> Int?
